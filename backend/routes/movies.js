@@ -23,14 +23,16 @@ router.post('/', verifyToken, verifyRole(['admin']), async (req, res) => {
             createdAt: new Date()
         };
 
+        console.log('Attempting to insert movie:', movieDoc);
         const result = await db.collection('movies').insertOne(movieDoc);
-        console.log('Movie created with id', result.insertedId.toString());
+        console.log('Movie created with id:', result.insertedId.toString());
+        
         // Return the created movie document for easier client-side handling
         const created = await db.collection('movies').findOne({ _id: result.insertedId });
         res.status(201).json({ message: 'Movie created', id: result.insertedId.toString(), movie: created });
     } catch (error) {
-        console.error('Failed to create movie', error);
-        res.status(500).json({ error: 'Failed to create movie' });
+        console.error('Failed to create movie:', error.message, error.stack);
+        res.status(500).json({ error: 'Failed to create movie: ' + error.message });
     }
 });
 
