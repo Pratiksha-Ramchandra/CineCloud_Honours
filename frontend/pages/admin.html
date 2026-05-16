@@ -246,6 +246,17 @@
                     movieForm.addEventListener('submit', async (e) => {
                         e.preventDefault();
                         try {
+                            // Test API connectivity first
+                            console.log('[FORM] Testing API connectivity...');
+                            const healthCheck = await fetch(`${API_URL}/movies/health`);
+                            const health = await healthCheck.json();
+                            console.log('[FORM] Health check result:', health);
+                            
+                            // Check if we have a valid token
+                            const token = getToken();
+                            console.log('[FORM] Token exists:', !!token);
+                            console.log('[FORM] Token length:', token ? token.length : 0);
+                            
                             const titleInput = document.getElementById('movieTitle');
                             const title = titleInput.value.trim();
                             const description = document.getElementById('movieDescription').value;
