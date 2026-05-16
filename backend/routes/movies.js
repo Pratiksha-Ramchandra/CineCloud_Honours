@@ -4,13 +4,27 @@ const { ObjectId, connectMongo } = require('../mongo');
 const router = express.Router();
 const { verifyToken, verifyRole } = require('./auth');
 
+// Health check endpoint (no auth required)
+router.get('/health', (req, res) => {
+    res.json({ status: 'Movies API is running', timestamp: new Date() });
+});
+
 // Create a new movie (admin only)
 router.post('/', verifyToken, verifyRole(['admin']), async (req, res) => {
+    console.log('[MOVIE CREATE] Endpoint hit - Method POST, User:', req.user);
     try {
         const { title, description, release_date, duration, genre, poster_url, trailer_url } = req.body;
-        if (!title) return res.status(400).json({ error: 'Title is required' });
+        console.log('[MOVIE CREATE] Request body:', { title, description, release_date, duration, genre, poster_url, trailer_url });
+        
+        if (!title) {
+            console.log('[MOVIE CREATE] Error: Title is required');
+            return res.status(400).json({ error: 'Title is required' });
+        }
 
+        console.log('[MOVIE CREATE] Connecting to MongoDB...');
         const db = await connectMongo();
+        console.log('[MOVIE CREATE] MongoDB connected, creating movieDoc');
+        
         const movieDoc = {
             title,
             description: description || '',
@@ -23,15 +37,17 @@ router.post('/', verifyToken, verifyRole(['admin']), async (req, res) => {
             createdAt: new Date()
         };
 
-        console.log('Attempting to insert movie:', movieDoc);
+        console.log('[MOVIE CREATE] Attempting to insert movie:', movieDoc);
         const result = await db.collection('movies').insertOne(movieDoc);
-        console.log('Movie created with id:', result.insertedId.toString());
+        console.log('[MOVIE CREATE] SUCCESS - Movie created with id:', result.insertedId.toString());
         
         // Return the created movie document for easier client-side handling
         const created = await db.collection('movies').findOne({ _id: result.insertedId });
+        console.log('[MOVIE CREATE] Returning response:', { message: 'Movie created', id: result.insertedId.toString(), movie: created });
         res.status(201).json({ message: 'Movie created', id: result.insertedId.toString(), movie: created });
     } catch (error) {
-        console.error('Failed to create movie:', error.message, error.stack);
+        console.error('[MOVIE CREATE] ERROR:', error.message);
+        console.error('[MOVIE CREATE] Stack:', error.stack);
         res.status(500).json({ error: 'Failed to create movie: ' + error.message });
     }
 });
