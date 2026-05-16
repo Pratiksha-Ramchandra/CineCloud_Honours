@@ -13,25 +13,37 @@ const normalizeRole = (role) => {
 };
 
 const verifyRole = (allowedRoles = []) => async (req, res, next) => {
+    console.log('[AUTH] verifyRole middleware - checking role for allowed roles:', allowedRoles);
     try {
         const token = req.headers['authorization']?.split(' ')[1];
         if (!token) {
+            console.log('[AUTH] verifyRole - No token provided');
             return res.status(401).json({ error: 'Access denied' });
         }
 
         const verified = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
         req.user = verified;
+        console.log('[AUTH] verifyRole - Token verified, user id:', req.user.id);
 
         const db = await connectMongo();
         const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.id) });
-        if (!user || !allowedRoles.includes(user.role)) {
+        console.log('[AUTH] verifyRole - User found in DB:', user ? { name: user.name, role: user.role } : 'NOT FOUND');
+        
+        if (!user) {
+            console.log('[AUTH] verifyRole - User not found in database');
+            return res.status(403).json({ error: 'User not found' });
+        }
+        
+        if (!allowedRoles.includes(user.role)) {
+            console.log('[AUTH] verifyRole - User role', user.role, 'not in allowed roles', allowedRoles);
             return res.status(403).json({ error: 'Insufficient role access' });
         }
 
         req.user.role = user.role;
+        console.log('[AUTH] verifyRole - Role check passed for user', user.name, 'with role', user.role);
         next();
     } catch (error) {
-        console.error(error);
+        console.error('[AUTH] verifyRole - Error:', error.message);
         res.status(403).json({ error: 'Invalid token or access denied' });
     }
 };
@@ -165,16 +177,20 @@ router.post('/login-role', async (req, res) => {
 
 // Verify token middleware
 const verifyToken = (req, res, next) => {
+    console.log('[AUTH] verifyToken middleware - checking Authorization header');
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
+        console.log('[AUTH] verifyToken - No token provided');
         return res.status(401).json({ error: 'Access denied' });
     }
 
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        console.log('[AUTH] verifyToken - Token verified, user:', verified);
         req.user = verified;
         next();
     } catch (error) {
+        console.log('[AUTH] verifyToken - Token verification failed:', error.message);
         res.status(403).json({ error: 'Invalid token' });
     }
 };
