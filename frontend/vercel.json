@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/login", "destination": "/pages/login.html" },
+    { "source": "/register", "destination": "/pages/register.html" },
+    { "source": "/dashboard", "destination": "/pages/dashboard.html" },
+    { "source": "/movies", "destination": "/pages/movies.html" },
+    { "source": "/movie-details", "destination": "/pages/movie-details.html" },
+    { "source": "/seat-selection", "destination": "/pages/seat-selection.html" },
+    { "source": "/payment", "destination": "/pages/payment.html" },
+    { "source": "/bookings", "destination": "/pages/bookings.html" },
+    { "source": "/profile", "destination": "/pages/profile.html" },
+    { "source": "/admin", "destination": "/pages/admin.html" }
+  ]
+}

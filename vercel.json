@@ -1,0 +1,18 @@
+{
+  "rewrites": [
+    { "source": "/css/:path*", "destination": "/frontend/css/:path*" },
+    { "source": "/js/:path*", "destination": "/frontend/js/:path*" },
+    { "source": "/pages/:path*", "destination": "/frontend/pages/:path*" },
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/login", "destination": "/frontend/pages/login.html" },
+    { "source": "/register", "destination": "/frontend/pages/register.html" },
+    { "source": "/dashboard", "destination": "/frontend/pages/dashboard.html" },
+    { "source": "/movies", "destination": "/frontend/pages/movies.html" },
+    { "source": "/movie-details", "destination": "/frontend/pages/movie-details.html" },
+    { "source": "/seat-selection", "destination": "/frontend/pages/seat-selection.html" },
+    { "source": "/payment", "destination": "/frontend/pages/payment.html" },
+    { "source": "/bookings", "destination": "/frontend/pages/bookings.html" },
+    { "source": "/profile", "destination": "/frontend/pages/profile.html" },
+    { "source": "/admin", "destination": "/frontend/pages/admin.html" }
+  ]
+}
