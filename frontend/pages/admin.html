@@ -142,23 +142,51 @@
                     </div>
                 `;
 
-                // Showtimes table
+                // Showtimes table - group by theater so each theater appears only once
                 const tableBody = document.getElementById('showtimesTable');
+                const theaterMap = {};
                 (showtimes || []).forEach(showtime => {
+                    const tId = showtime.theater_id || showtime.theaterId || showtime.theater_id;
+                    if (!theaterMap[tId]) {
+                        theaterMap[tId] = { name: showtime.theater_name, showtimes: [] };
+                    }
+                    theaterMap[tId].showtimes.push(showtime);
+                });
+
+                Object.keys(theaterMap).forEach(tid => {
+                    const t = theaterMap[tid];
+                    // default to first showtime id for the Free Seats action; user can pick specific showtime from select
+                    const defaultShowtimeId = t.showtimes[0] ? t.showtimes[0].id : '';
                     tableBody.innerHTML += `
                         <tr class="border-b">
-                            <td class="px-4 py-3 text-sm">${showtime.theater_name}</td>
+                            <td class="px-4 py-3 text-sm">${t.name}</td>
                             <td class="px-4 py-3 text-sm">
-                                <button type="button" class="showtime-free text-red-600 hover:text-red-800" data-id="${showtime.id}">Free Seats</button>
+                                <select class="showtime-select border rounded px-2 py-1 mr-2">
+                                    ${t.showtimes.map(st => `<option value="${st.id}">${new Date(st.show_date || st.showDate).toLocaleDateString()} ${st.show_time || st.showTime}</option>`).join('')}
+                                </select>
+                                <button type="button" class="showtime-free text-red-600 hover:text-red-800" data-id="${defaultShowtimeId}">Free Seats</button>
                             </td>
                         </tr>
                     `;
+                });
+
+                // Update Free Seats button when a showtime is selected
+                document.querySelectorAll('.showtime-select').forEach(select => {
+                    select.addEventListener('change', (e) => {
+                        const row = e.target.closest('tr');
+                        const btn = row.querySelector('.showtime-free');
+                        if (btn) btn.setAttribute('data-id', e.target.value);
+                    });
                 });
 
                 // Attach action handlers for Free Seats only
                 document.querySelectorAll('.showtime-free').forEach(btn => {
                     btn.addEventListener('click', async () => {
                         const id = btn.getAttribute('data-id');
+                        if (!id) {
+                            alert('No showtime selected');
+                            return;
+                        }
                         if (!confirm('Free all seats for this showtime? This will cancel all confirmed bookings.')) return;
                         const res = await api.freeShowtime(id);
                         if (res.error) {
@@ -252,6 +280,7 @@
 
                             const payload = { title, description, release_date, duration, genre, poster_url, trailer_url };
                             const result = await api.createMovie(payload);
+                            console.log('createMovie result', result);
                             if (result.error) {
                                 alert('Failed to create movie: ' + result.error);
                             } else {
