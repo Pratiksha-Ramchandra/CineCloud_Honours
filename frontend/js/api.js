@@ -71,12 +71,20 @@ const api = {
     },
 
     async createMovie(data) {
+        console.log('[API] createMovie - Sending request to', `${API_URL}/movies`);
+        console.log('[API] createMovie - Headers:', setAuthHeader());
+        console.log('[API] createMovie - Body:', data);
+        
         const response = await fetch(`${API_URL}/movies`, {
             method: 'POST',
             headers: setAuthHeader(),
             body: JSON.stringify(data)
         });
-        return response.json();
+        
+        const result = await response.json();
+        console.log('[API] createMovie - Response status:', response.status);
+        console.log('[API] createMovie - Response body:', result);
+        return result;
     },
 
     // Bookings
