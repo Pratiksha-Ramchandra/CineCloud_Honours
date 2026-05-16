@@ -1,211 +1,309 @@
-const express = require('express');
-const { ObjectId, connectMongo } = require('../mongo');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
 
-const router = express.Router();
-const { verifyToken, verifyRole } = require('./auth');
-
-// Create a new movie (admin only)
-router.post('/', verifyToken, verifyRole(['admin']), async (req, res) => {
-    try {
-        const { title, description, release_date, duration, genre, poster_url, trailer_url } = req.body;
-        if (!title) return res.status(400).json({ error: 'Title is required' });
-
-        const db = await connectMongo();
-        const movieDoc = {
-            title,
-            description: description || '',
-            releaseDate: release_date ? new Date(release_date) : new Date(),
-            duration: duration || null,
-            genre: genre || null,
-            posterUrl: poster_url || null,
-            trailerUrl: trailer_url || null,
-            isActive: true,
-            createdAt: new Date()
-        };
-
-        console.log('Attempting to insert movie:', movieDoc);
-        const result = await db.collection('movies').insertOne(movieDoc);
-        console.log('Movie created with id:', result.insertedId.toString());
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAdmin()) return;
         
-        // Return the created movie document for easier client-side handling
-        const created = await db.collection('movies').findOne({ _id: result.insertedId });
-        res.status(201).json({ message: 'Movie created', id: result.insertedId.toString(), movie: created });
-    } catch (error) {
-        console.error('Failed to create movie:', error.message, error.stack);
-        res.status(500).json({ error: 'Failed to create movie: ' + error.message });
-    }
-});
+        const user = getUser();
 
-// Get all movies
-router.get('/', async (req, res) => {
-    try {
-        const db = await connectMongo();
-        const movies = await db.collection('movies')
-            .find({ isActive: true })
-            .sort({ releaseDate: -1 })
-            .toArray();
-
-        const response = movies.map(movie => ({
-            ...movie,
-            id: movie._id.toString(),
-            poster_url: movie.posterUrl || movie.poster_url,
-            release_date: movie.releaseDate || movie.release_date,
-            trailer_url: movie.trailerUrl || movie.trailer_url
-        }));
-
-        res.json(response);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Failed to fetch movies' });
-    }
-});
-
-// Get movie details with showtimes
-router.get('/:id', async (req, res) => {
-    try {
-        const db = await connectMongo();
-        const movie = await db.collection('movies').findOne({ _id: new ObjectId(req.params.id), isActive: true });
-        if (!movie) {
-            return res.status(404).json({ error: 'Movie not found' });
-        }
-
-        const showtimes = await db.collection('showtimes').aggregate([
-            { $match: { movieId: movie._id, showDate: { $gte: new Date(new Date().toISOString().split('T')[0]) } } },
-            {
-                $lookup: {
-                    from: 'theaters',
-                    localField: 'theaterId',
-                    foreignField: '_id',
-                    as: 'theater'
-                }
-            },
-            { $unwind: { path: '$theater', preserveNullAndEmptyArrays: true } },
-            {
-                $project: {
-                    id: { $toString: '$_id' },
-                    show_date: '$showDate',
-                    show_time: '$showTime',
-                    price: '$price',
-                    available_seats: '$availableSeats',
-                    total_seats: '$totalSeats',
-                    theater_name: '$theater.name',
-                    location: '$theater.location'
-                }
-            },
-            { $sort: { show_date: 1, show_time: 1 } }
-        ]).toArray();
-
-        res.json({
-            ...movie,
-            id: movie._id.toString(),
-            poster_url: movie.posterUrl || movie.poster_url,
-            release_date: movie.releaseDate || movie.release_date,
-            trailer_url: movie.trailerUrl || movie.trailer_url,
-            showtimes
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Failed to fetch movie details' });
-    }
-});
-
-// Get showtime seats
-router.get('/showtime/:showtimeId/seats', async (req, res) => {
-    try {
-        const db = await connectMongo();
-        const showtime = await db.collection('showtimes').findOne({ _id: new ObjectId(req.params.showtimeId) });
-        if (!showtime) {
-            return res.status(404).json({ error: 'Showtime not found' });
-        }
-
-        const bookings = await db.collection('bookings').find({ showtimeId: showtime._id, status: 'confirmed' }).toArray();
-        const bookedSeats = [];
-        bookings.forEach(booking => {
-            if (Array.isArray(booking.seats)) {
-                bookedSeats.push(...booking.seats);
+        function safeSetNavbar(user, active) {
+            try {
+                document.getElementById('navbar').innerHTML = Navbar(user, active);
+            } catch (err) {
+                console.warn('Navbar render failed', err);
+                const el = document.getElementById('navbar');
+                if (el) el.innerHTML = '';
             }
-        });
+        }
+        let statsChart = null;
+        
+        async function loadAdminDashboard() {
+            try {
+                const stats = await api.getAdminStats();
+                const bookings = await api.getAllBookings();
+                const showtimes = await api.getAllShowtimes();
+                const movies = await api.getMovies();
+                const theaters = await api.getTheaters();
 
-        const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-        const seats = [];
-        for (let row of rows) {
-            for (let i = 1; i <= 12; i++) {
-                const seatId = `${row}${i}`;
-                seats.push({
-                    id: seatId,
-                    row,
-                    number: i,
-                    is_booked: bookedSeats.includes(seatId)
+                if (stats?.error) {
+                    safeSetNavbar(user, 'admin');
+                    document.getElementById('content').innerHTML = `<div class="bg-red-50 border border-red-200 p-6 rounded">` +
+                        `<h2 class="text-lg font-semibold text-red-700">Unable to load admin data</h2>` +
+                        `<p class="text-sm text-red-600 mt-2">${stats.error}</p></div>`;
+                    return;
+                }
+
+                safeSetNavbar(user, 'admin');
+
+                document.getElementById('content').innerHTML = `
+                    <h1 class="text-2xl font-bold mb-6">Admin Dashboard</h1>
+                    <div id="adminSummary">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                            <div class="bg-white rounded-xl p-6 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Total Users</p><p class="text-2xl font-bold">${stats.totalUsers || 0}</p></div>
+                                    <i class="fas fa-users text-3xl text-blue-500"></i>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Active Movies</p><p class="text-2xl font-bold">${stats.totalMovies || 0}</p></div>
+                                    <i class="fas fa-film text-3xl text-green-500"></i>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Total Bookings</p><p class="text-2xl font-bold">${stats.totalBookings || 0}</p></div>
+                                    <i class="fas fa-ticket-alt text-3xl text-purple-500"></i>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-xl p-6 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Total Revenue</p><p class="text-2xl font-bold">₹${stats.totalRevenue || 0}</p></div>
+                                    <i class="fas fa-rupee-sign text-3xl text-orange-500"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold mb-4">Showtimes</h3>
+                        <div class="overflow-x-auto mb-6">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500">Theater</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="showtimesTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6 mt-6">
+                        <h3 class="font-semibold mb-4">Manage Movies</h3>
+                        <form id="movieForm" class="space-y-4 max-w-2xl">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                <input type="text" id="movieTitle" required class="w-full px-4 py-2 border rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea id="movieDescription" class="w-full px-4 py-2 border rounded-lg"></textarea>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Release Date</label>
+                                    <input type="date" id="movieReleaseDate" class="w-full px-4 py-2 border rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                                    <input type="number" id="movieDuration" class="w-full px-4 py-2 border rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Genre</label>
+                                    <input type="text" id="movieGenre" class="w-full px-4 py-2 border rounded-lg">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Poster (image)</label>
+                                <input type="file" id="posterFile" accept="image/*" class="mb-2">
+                                <input type="url" id="moviePosterUrl" placeholder="Or paste Cloudinary image URL" class="w-full px-4 py-2 border rounded-lg">
+                                <div id="posterStatus" class="text-sm text-green-600"></div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Trailer (video)</label>
+                                <input type="file" id="trailerFile" accept="video/*" class="mb-2">
+                                <input type="url" id="movieTrailerUrl" placeholder="Or paste Cloudinary video URL" class="w-full px-4 py-2 border rounded-lg">
+                                <div id="trailerStatus" class="text-sm text-green-600"></div>
+                            </div>
+                            <div>
+                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Create Movie</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+
+                // Showtimes table - group by theater so each theater appears only once
+                const tableBody = document.getElementById('showtimesTable');
+                const theaterMap = {};
+                (showtimes || []).forEach(showtime => {
+                    const tId = showtime.theater_id || showtime.theaterId || showtime.theater_id;
+                    if (!theaterMap[tId]) {
+                        theaterMap[tId] = { name: showtime.theater_name, showtimes: [] };
+                    }
+                    theaterMap[tId].showtimes.push(showtime);
                 });
+
+                Object.keys(theaterMap).forEach(tid => {
+                    const t = theaterMap[tid];
+                    // default to first showtime id for the Free Seats action; user can pick specific showtime from select
+                    const defaultShowtimeId = t.showtimes[0] ? t.showtimes[0].id : '';
+                    tableBody.innerHTML += `
+                        <tr class="border-b">
+                            <td class="px-4 py-3 text-sm">${t.name}</td>
+                            <td class="px-4 py-3 text-sm">
+                                <select class="showtime-select border rounded px-2 py-1 mr-2">
+                                    ${t.showtimes.map(st => `<option value="${st.id}">${new Date(st.show_date || st.showDate).toLocaleDateString()} ${st.show_time || st.showTime}</option>`).join('')}
+                                </select>
+                                <button type="button" class="showtime-free text-red-600 hover:text-red-800" data-id="${defaultShowtimeId}">Free Seats</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                // Update Free Seats button when a showtime is selected
+                document.querySelectorAll('.showtime-select').forEach(select => {
+                    select.addEventListener('change', (e) => {
+                        const row = e.target.closest('tr');
+                        const btn = row.querySelector('.showtime-free');
+                        if (btn) btn.setAttribute('data-id', e.target.value);
+                    });
+                });
+
+                // Attach action handlers for Free Seats only
+                document.querySelectorAll('.showtime-free').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const id = btn.getAttribute('data-id');
+                        if (!id) {
+                            alert('No showtime selected');
+                            return;
+                        }
+                        if (!confirm('Free all seats for this showtime? This will cancel all confirmed bookings.')) return;
+                        const res = await api.freeShowtime(id);
+                        if (res.error) {
+                            alert('Failed to free seats: ' + res.error);
+                        } else {
+                            alert('Seats freed. Cancelled bookings: ' + (res.cancelledBookings || 0));
+                            loadAdminDashboard();
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error('Admin dashboard error', err);
+                safeSetNavbar(user, 'admin');
+                document.getElementById('content').innerHTML = `<div class="bg-red-50 border border-red-200 p-6 rounded"><h2 class="text-lg font-semibold text-red-700">Failed to load dashboard</h2><p class="text-sm text-red-600 mt-2">${err.message || 'Unknown error'}</p></div>`;
             }
         }
 
-        res.json({
-            showtime: {
-                ...showtime,
-                id: showtime._id.toString(),
-                show_date: showtime.showDate,
-                show_time: showtime.showTime,
-                available_seats: showtime.availableSeats,
-                total_seats: showtime.totalSeats
-            },
-            seats
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Failed to fetch seats' });
-    }
-});
+                // Cloudinary upload via backend API
+                async function uploadToCloudinary(file, resourceType = 'image') {
+                    // Convert file to base64
+                    const reader = new FileReader();
+                    return new Promise((resolve, reject) => {
+                        reader.onload = async () => {
+                            try {
+                                const base64 = reader.result.split(',')[1];
+                                const response = await fetch(`${API_URL}/movies/upload`, {
+                                    method: 'POST',
+                                    headers: setAuthHeader(),
+                                    body: JSON.stringify({
+                                        file: `data:${file.type};base64,${base64}`,
+                                        resourceType
+                                    })
+                                });
+                                const result = await response.json();
+                                if (result.error) {
+                                    reject(new Error(result.error));
+                                } else {
+                                    resolve({ secure_url: result.url, url: result.url });
+                                }
+                            } catch (err) {
+                                reject(err);
+                            }
+                        };
+                        reader.onerror = () => reject(new Error('File read failed'));
+                        reader.readAsDataURL(file);
+                    });
+                }
 
-// Upload file to Cloudinary (admin only)
-router.post('/upload', verifyToken, verifyRole(['admin']), async (req, res) => {
-    try {
-        const cloudinaryUrl = process.env.CLOUDINARY_URL;
-        if (!cloudinaryUrl) {
-            return res.status(500).json({ error: 'Cloudinary URL not configured' });
-        }
+                // Movie form handling
+                const movieForm = document.getElementById('movieForm');
+                if (movieForm) {
+                    const posterFileInput = document.getElementById('posterFile');
+                    const trailerFileInput = document.getElementById('trailerFile');
+                    const posterStatus = document.getElementById('posterStatus');
+                    const trailerStatus = document.getElementById('trailerStatus');
 
-        // Parse cloudinary://API_KEY:API_SECRET@CLOUD_NAME format
-        const match = cloudinaryUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
-        if (!match) {
-            return res.status(500).json({ error: 'Invalid Cloudinary URL format' });
-        }
-        const [, apiKey, apiSecret, cloudName] = match;
+                    movieForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        try {
+                            const titleInput = document.getElementById('movieTitle');
+                            const title = titleInput.value.trim();
+                            const description = document.getElementById('movieDescription').value;
+                            const release_date = document.getElementById('movieReleaseDate').value;
+                            const duration = document.getElementById('movieDuration').value;
+                            const genre = document.getElementById('movieGenre').value;
+                            const posterUrlText = document.getElementById('moviePosterUrl').value.trim();
+                            const trailerUrlText = document.getElementById('movieTrailerUrl').value.trim();
 
-        const { file, resourceType = 'image' } = req.body;
-        if (!file) {
-            return res.status(400).json({ error: 'No file provided' });
-        }
+                            if (!title) {
+                                alert('Title is required to create a movie.');
+                                titleInput.focus();
+                                return;
+                            }
 
-        // Decode base64 data
-        const base64Data = file.includes(',') ? file.split(',')[1] : file;
-        const buffer = Buffer.from(base64Data, 'base64');
+                            let poster_url = posterUrlText || null;
+                            let trailer_url = trailerUrlText || null;
 
-        // Use node-fetch to upload to Cloudinary
-        const FormData = require('form-data');
-        const uploadForm = new FormData();
-        uploadForm.append('file', buffer, { filename: 'upload' });
-        uploadForm.append('upload_preset', 'ml_default');
-        uploadForm.append('api_key', apiKey);
+                            if (posterFileInput.files && posterFileInput.files[0]) {
+                                posterStatus.textContent = 'Uploading poster...';
+                                const resp = await uploadToCloudinary(posterFileInput.files[0], 'image');
+                                poster_url = resp.secure_url || resp.url || poster_url;
+                                posterStatus.textContent = poster_url ? 'Poster uploaded' : 'Poster upload failed';
+                            }
 
-        const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
-        const fetchResponse = await fetch(uploadUrl, {
-            method: 'POST',
-            body: uploadForm,
-            headers: uploadForm.getHeaders()
-        });
+                            if (trailerFileInput.files && trailerFileInput.files[0]) {
+                                trailerStatus.textContent = 'Uploading trailer...';
+                                const resp = await uploadToCloudinary(trailerFileInput.files[0], 'video');
+                                trailer_url = resp.secure_url || resp.url || trailer_url;
+                                trailerStatus.textContent = trailer_url ? 'Trailer uploaded' : 'Trailer upload failed';
+                            }
 
-        const result = await fetchResponse.json();
+                            const payload = { title, description, release_date, duration, genre, poster_url, trailer_url };
+                            const result = await api.createMovie(payload);
+                            console.log('createMovie result', result);
+                            if (result.error) {
+                                alert('Failed to create movie:\n' + result.error);
+                            } else if (result.id) {
+                                alert('Movie created successfully with ID: ' + result.id);
+                                // reset form
+                                movieForm.reset();
+                                posterStatus.textContent = '';
+                                trailerStatus.textContent = '';
+                                // refresh dashboard
+                                loadAdminDashboard();
+                            } else {
+                                alert('Movie created but response incomplete');
+                                loadAdminDashboard();
+                            }
+                        } catch (err) {
+                            console.error('Movie creation failed', err);
+                            alert('Movie creation failed: ' + (err.message || err));
+                        }
+                    });
+                }
 
-        if (result.error) {
-            return res.status(400).json({ error: result.error.message || 'Upload failed' });
-        }
-
-        res.json({ url: result.secure_url || result.url });
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ error: 'Upload failed: ' + error.message });
-    }
-});
-
-module.exports = router;
+                loadAdminDashboard();
+        })();
+    </script>
+</body>
+</html>
