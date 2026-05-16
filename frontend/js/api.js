@@ -1,7 +1,7 @@
 // API Configuration — use local API on localhost, Render backend in production
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? '/api'
-    : 'https://cinecloud-booking-console.onrender.com/api';
+    : 'https://cinecloud-honours.onrender.com/api';
 
 // Get token from localStorage
 function getToken() {
