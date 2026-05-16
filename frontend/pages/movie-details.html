@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Details - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const movieId = urlParams.get('id');
+        const user = getUser();
+        
+        async function loadMovieDetails() {
+            const data = await api.getMovieDetails(movieId);
+            const movie = data;
+            const showtimes = data.showtimes || [];
+            
+            document.getElementById('navbar').innerHTML = Navbar(user, 'movies');
+            
+            const trailerHtml = movie.trailer_url ? `<div class="mb-4"><video controls src="${movie.trailer_url}" class="w-full h-56 object-cover rounded"></video></div>` : '';
+
+            document.getElementById('content').innerHTML = `
+                <button onclick="window.location.href='/movies'" class="flex items-center text-gray-600 hover:text-gray-800 mb-4">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Movies
+                </button>
+                
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
+                    <div class="md:flex">
+                        <div class="md:w-1/3">
+                            <img src="${movie.poster_url}" alt="${movie.title}" class="w-full h-auto">
+                        </div>
+                        <div class="md:w-2/3 p-6">
+                            <h1 class="text-3xl font-bold mb-2">${movie.title}</h1>
+                            <div class="flex flex-wrap gap-4 mb-4 text-sm text-gray-600">
+                                <span>${movie.duration} min</span>
+                                <span>${movie.language}</span>
+                                <span>${movie.genre}</span>
+                            </div>
+                            ${trailerHtml}
+                            <p class="text-gray-700 mb-4">${movie.description}</p>
+                            <div class="text-sm text-gray-500">
+                                <i class="fas fa-calendar mr-2"></i>Release Date: ${new Date(movie.release_date).toLocaleDateString()}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-xl font-bold mb-4">Select Showtime</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="showtimesGrid"></div>
+                </div>
+            `;
+            
+            const showtimesGrid = document.getElementById('showtimesGrid');
+            if (showtimes.length === 0) {
+                showtimesGrid.innerHTML = '<p class="text-gray-500 col-span-full text-center py-8">No showtimes available</p>';
+            } else {
+                showtimes.forEach(showtime => {
+                    showtimesGrid.innerHTML += `
+                <button onclick="selectShowtime('${showtime.id}', ${showtime.price})" class="border rounded-lg p-3 text-left hover:border-blue-500 transition-all hover:shadow-md">
+                            <div class="font-semibold">${new Date(showtime.show_date).toLocaleDateString()}</div>
+                            <div class="text-sm text-gray-600"><i class="far fa-clock mr-1"></i>${showtime.show_time}</div>
+                            <div class="text-sm font-semibold text-blue-600 mt-1">₹${showtime.price}</div>
+                            <div class="text-xs text-gray-500">${showtime.available_seats} seats left</div>
+                            <div class="text-xs text-gray-400 mt-1"><i class="fas fa-building mr-1"></i>${showtime.theater_name}</div>
+                        </button>
+                    `;
+                });
+            }
+        }
+        
+        window.selectShowtime = function(selectShowtimeId, price) {
+            localStorage.setItem('selectedShowtime', JSON.stringify({ id: selectShowtimeId, price }));
+            window.location.href = `/seat-selection?showtimeId=${selectShowtimeId}&price=${price}`;
+        };
+        
+        loadMovieDetails();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const user = getUser();
+        let showPasswordForm = false;
+        
+        function loadProfile() {
+            document.getElementById('navbar').innerHTML = Navbar(user, 'profile');
+            
+            document.getElementById('content').innerHTML = `
+                <div class="max-w-2xl mx-auto">
+                    <h1 class="text-3xl font-bold mb-8">My Profile</h1>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <div class="flex items-center gap-4 mb-6 pb-6 border-b">
+                            <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-3xl text-blue-600"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-2xl font-semibold">${user.name}</h2>
+                                <p class="text-gray-500 capitalize">${user.role}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-envelope w-5 text-gray-400"></i>
+                                <div>
+                                    <p class="text-sm text-gray-500">Email Address</p>
+                                    <p class="font-medium">${user.email}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-phone w-5 text-gray-400"></i>
+                                <div>
+                                    <p class="text-sm text-gray-500">Phone Number</p>
+                                    <p class="font-medium">${user.phone || 'Not provided'}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-lock w-5 text-gray-400"></i>
+                                <div>
+                                    <p class="text-sm text-gray-500">Password</p>
+                                    <button onclick="togglePasswordForm()" class="text-blue-600 hover:text-blue-700 text-sm">Change Password</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="passwordForm" class="hidden bg-white rounded-xl shadow-sm p-6"></div>
+                </div>
+            `;
+        }
+        
+        window.togglePasswordForm = function() {
+            showPasswordForm = !showPasswordForm;
+            const formDiv = document.getElementById('passwordForm');
+            
+            if (showPasswordForm) {
+                formDiv.classList.remove('hidden');
+                formDiv.innerHTML = `
+                    <h3 class="text-lg font-semibold mb-4">Change Password</h3>
+                    <form id="changePasswordForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                            <input type="password" id="currentPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                            <input type="password" id="newPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                            <input type="password" id="confirmPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Update Password</button>
+                    </form>
+                `;
+                
+                document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const newPassword = document.getElementById('newPassword').value;
+                    const confirmPassword = document.getElementById('confirmPassword').value;
+                    
+                    if (newPassword !== confirmPassword) {
+                        alert('New passwords do not match');
+                        return;
+                    }
+                    
+                    if (newPassword.length < 6) {
+                        alert('Password must be at least 6 characters');
+                        return;
+                    }
+                    
+                    const result = await api.changePassword({
+                        currentPassword: document.getElementById('currentPassword').value,
+                        newPassword: newPassword
+                    });
+                    
+                    if (result.error) {
+                        alert(result.error);
+                    } else {
+                        alert('Password changed successfully');
+                        togglePasswordForm();
+                    }
+                });
+            } else {
+                formDiv.classList.add('hidden');
+            }
+        }
+        
+        loadProfile();
+        })();
+    </script>
+</body>
+</html>

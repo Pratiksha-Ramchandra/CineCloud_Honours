@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movies - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const user = getUser();
+        
+        async function loadMovies() {
+            const movies = await api.getMovies();
+            
+            document.getElementById('navbar').innerHTML = Navbar(user, 'movies');
+            
+            document.getElementById('content').innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8">
+                    <h1 class="text-3xl font-bold mb-4 md:mb-0">Now Showing</h1>
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="searchInput" placeholder="Search movies..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="moviesGrid"></div>
+            `;
+            
+            function renderMovies(filteredMovies) {
+                const grid = document.getElementById('moviesGrid');
+                grid.innerHTML = '';
+                filteredMovies.forEach(movie => {
+                    grid.innerHTML += `
+                        <div onclick="viewMovie('${movie.id}')" class="movie-card bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer">
+                            <img src="${movie.poster_url}" alt="${movie.title}" class="w-full h-64 object-cover">
+                            <div class="p-4">
+                                <h3 class="font-bold text-lg mb-1">${movie.title}</h3>
+                                <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                                    <span>${movie.genre}</span>
+                                    <span>•</span>
+                                    <span>${movie.duration} min</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span></span>
+                                    <span class="text-blue-600 font-semibold">Book Now →</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            renderMovies(movies);
+            
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                const filtered = movies.filter(m => 
+                    m.title.toLowerCase().includes(searchTerm) || 
+                    m.genre.toLowerCase().includes(searchTerm)
+                );
+                renderMovies(filtered);
+            });
+        }
+        
+        window.viewMovie = function(movieId) {
+            window.location.href = `/movie-details?id=${movieId}`;
+        }
+        
+        loadMovies();
+        })();
+    </script>
+</body>
+</html>

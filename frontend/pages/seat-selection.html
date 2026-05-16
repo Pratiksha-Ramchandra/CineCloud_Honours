@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Seats - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const showtimeId = urlParams.get('showtimeId');
+        const price = parseFloat(urlParams.get('price'));
+        const user = getUser();
+        let seatsData = [];
+        let selectedSeats = [];
+        
+        async function loadSeats() {
+            const data = await api.getShowtimeSeats(showtimeId);
+            seatsData = data.seats;
+            
+            document.getElementById('navbar').innerHTML = Navbar(user, 'movies');
+            
+            document.getElementById('content').innerHTML = `
+                <button onclick="window.history.back()" class="flex items-center text-gray-600 hover:text-gray-800 mb-4">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Movie
+                </button>
+                
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold">Select Your Seats</h2>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-600">Showtime: ${data.showtime.show_date} at ${data.showtime.show_time}</p>
+                            <p class="text-sm font-semibold text-blue-600">₹${price} per seat</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <div class="text-center mb-6">
+                            <div class="inline-block bg-gray-800 text-white px-12 py-3 rounded-lg"><i class="fas fa-tv mr-2"></i>SCREEN</div>
+                        </div>
+                        <div class="seat-grid" id="seatsGrid"></div>
+                    </div>
+                    
+                    <div class="flex justify-center gap-6 mb-6">
+                        <div class="flex items-center"><div class="w-6 h-6 bg-blue-100 rounded mr-2"></div><span class="text-sm">Available</span></div>
+                        <div class="flex items-center"><div class="w-6 h-6 bg-green-500 rounded mr-2"></div><span class="text-sm">Selected</span></div>
+                        <div class="flex items-center"><div class="w-6 h-6 bg-gray-300 rounded mr-2"></div><span class="text-sm">Booked</span></div>
+                    </div>
+                    
+                    <div id="bookingSummary" class="hidden border-t pt-4"></div>
+                </div>
+            `;
+            
+            renderSeats();
+        }
+        
+        function renderSeats() {
+            const grid = document.getElementById('seatsGrid');
+            grid.innerHTML = '';
+            
+            seatsData.forEach(seat => {
+                const isSelected = selectedSeats.includes(seat.id);
+                const seatClass = seat.is_booked ? 'booked' : (isSelected ? 'selected' : 'available');
+                
+                grid.innerHTML += `
+                    <button onclick="toggleSeat('${seat.id}')" 
+                        class="seat ${seatClass}" 
+                        ${seat.is_booked ? 'disabled' : ''}>
+                        ${seat.id}
+                    </button>
+                `;
+            });
+            
+            updateSummary();
+        }
+        
+        window.toggleSeat = function(seatId) {
+            const seat = seatsData.find(s => s.id === seatId);
+            if (seat.is_booked) return;
+            
+            if (selectedSeats.includes(seatId)) {
+                selectedSeats = selectedSeats.filter(s => s !== seatId);
+            } else {
+                selectedSeats.push(seatId);
+            }
+            
+            renderSeats();
+        }
+        
+        function updateSummary() {
+            const summaryDiv = document.getElementById('bookingSummary');
+            
+            if (selectedSeats.length > 0) {
+                const totalAmount = selectedSeats.length * price;
+                summaryDiv.classList.remove('hidden');
+                summaryDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <span class="font-semibold">Selected Seats: </span>
+                            <span>${selectedSeats.join(', ')}</span>
+                            <span class="ml-4 text-sm text-gray-500">(${selectedSeats.length} tickets)</span>
+                        </div>
+                        <div>
+                            <span class="font-semibold">Total: </span>
+                            <span class="text-2xl font-bold text-blue-600">₹${totalAmount}</span>
+                        </div>
+                    </div>
+                    <button onclick="proceedToPayment()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                        Proceed to Payment
+                    </button>
+                `;
+            } else {
+                summaryDiv.classList.add('hidden');
+            }
+        }
+        
+        window.proceedToPayment = function() {
+            localStorage.setItem('selectedSeats', JSON.stringify(selectedSeats));
+            localStorage.setItem('showtimeId', showtimeId);
+            localStorage.setItem('totalAmount', selectedSeats.length * price);
+            window.location.href = '/payment';
+        };
+        
+        loadSeats();
+        })();
+    </script>
+</body>
+</html>

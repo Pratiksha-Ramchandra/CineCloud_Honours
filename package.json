@@ -1,0 +1,10 @@
+{
+  "name": "cinecloud-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install-backend": "npm install --prefix backend",
+    "seed-mongo": "npm install --prefix backend && npm --prefix backend run seed-mongo",
+    "start-backend": "npm --prefix backend start"
+  }
+}

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const user = getUser();
+        const showtimeId = localStorage.getItem('showtimeId');
+        const selectedSeats = JSON.parse(localStorage.getItem('selectedSeats') || '[]');
+        const totalAmount = localStorage.getItem('totalAmount');
+        
+        async function loadPayment() {
+            document.getElementById('navbar').innerHTML = Navbar(user, 'movies');
+            
+            if (!showtimeId || selectedSeats.length === 0 || !totalAmount) {
+                window.alert('No booking information found. Please choose seats again.');
+                return window.location.href = '/movies';
+            }
+
+            const pricePerSeat = selectedSeats.length ? Number(totalAmount) / selectedSeats.length : 0;
+            document.getElementById('content').innerHTML = `
+                <button onclick="window.history.back()" class="flex items-center text-gray-600 hover:text-gray-800 mb-4">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Seats
+                </button>
+                
+                <div class="max-w-2xl mx-auto">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h2 class="text-xl font-bold mb-4">Payment Summary</h2>
+                        <div class="space-y-3">
+                            <div class="flex justify-between py-2 border-b">
+                                <span class="text-gray-600">Tickets</span>
+                                <span class="font-medium">${selectedSeats.length} seats</span>
+                            </div>
+                            <div class="flex justify-between py-2 border-b">
+                                <span class="text-gray-600">Seats</span>
+                                <span class="font-medium">${selectedSeats.join(', ')}</span>
+                            </div>
+                            <div class="flex justify-between py-2 border-b">
+                                <span class="text-gray-600">Price per seat</span>
+                                <span class="font-medium">₹${pricePerSeat}</span>
+                            </div>
+                            <div class="flex justify-between py-2 text-lg font-bold">
+                                <span>Total Amount</span>
+                                <span class="text-blue-600">₹${totalAmount}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold mb-4">Payment Method</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50" onclick="selectPayment('card')">
+                                <input type="radio" name="payment" value="card" class="mr-3">
+                                <i class="fab fa-cc-visa text-2xl text-blue-600 mr-3"></i>
+                                <div>
+                                    <p class="font-medium">Credit/Debit Card</p>
+                                    <p class="text-xs text-gray-500">Visa, Mastercard, RuPay</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50" onclick="selectPayment('upi')">
+                                <input type="radio" name="payment" value="upi" class="mr-3">
+                                <i class="fab fa-google-pay text-2xl text-green-600 mr-3"></i>
+                                <div>
+                                    <p class="font-medium">UPI / Google Pay</p>
+                                    <p class="text-xs text-gray-500">Instant payment</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="processPayment()" id="payBtn" class="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-lock mr-2"></i>Pay Now
+                        </button>
+                    </div>
+                </div>
+            `;
+            // default UPI selected
+            document.querySelector('input[name="payment"][value="upi"]').checked = true;
+        }
+        
+        window.selectPayment = function(method) {
+            document.querySelectorAll('input[name="payment"]').forEach(input => {
+                input.checked = input.value === method;
+            });
+        };
+        
+        function buildReceiptData(result, paymentMethod) {
+            const selectedSeats = JSON.parse(localStorage.getItem('selectedSeats') || '[]');
+            const totalAmount = localStorage.getItem('totalAmount') || '0';
+            return {
+                bookingId: result.bookingId,
+                userName: user.name,
+                userEmail: user.email,
+                seats: selectedSeats.join(', '),
+                totalAmount,
+                paymentMethod,
+                bookingDate: new Date().toLocaleString(),
+                showtimeId
+            };
+        }
+
+        function renderPaymentSuccess(result, paymentMethod) {
+            const receiptData = buildReceiptData(result, paymentMethod);
+            window.currentReceiptData = receiptData;
+            document.getElementById('content').innerHTML = `
+                <div class="max-w-2xl mx-auto">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6 text-center">
+                        <div class="text-green-600 mb-4">
+                            <i class="fas fa-check-circle text-5xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-2">Payment Successful</h2>
+                        <p class="text-gray-600 mb-4">Your booking is confirmed.</p>
+                        <p class="font-semibold">Booking ID: ${receiptData.bookingId}</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-4">Receipt Details</h3>
+                        <div class="space-y-3 text-sm text-gray-700">
+                            <div><span class="font-semibold">Name:</span> ${receiptData.userName}</div>
+                            <div><span class="font-semibold">Email:</span> ${receiptData.userEmail}</div>
+                            <div><span class="font-semibold">Seats:</span> ${receiptData.seats}</div>
+                            <div><span class="font-semibold">Total Paid:</span> ₹${receiptData.totalAmount}</div>
+                            <div><span class="font-semibold">Payment Method:</span> ${receiptData.paymentMethod.toUpperCase()}</div>
+                            <div><span class="font-semibold">Date:</span> ${receiptData.bookingDate}</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <button onclick="downloadReceipt()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors">Download Receipt (PDF)</button>
+                        <button onclick="window.location.href='/bookings'" class="w-full bg-gray-100 text-gray-800 py-3 rounded-lg hover:bg-gray-200 transition-colors">Go to My Bookings</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.downloadReceipt = function(receiptData) {
+            receiptData = receiptData || window.currentReceiptData;
+            if (!receiptData) {
+                return alert('No receipt data available to download.');
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text('CineCloud Booking Receipt', 20, 20);
+            doc.setFontSize(12);
+            const lines = [
+                `Booking ID: ${receiptData.bookingId}`,
+                `Name: ${receiptData.userName}`,
+                `Email: ${receiptData.userEmail}`,
+                `Seats: ${receiptData.seats}`,
+                `Total Paid: ₹${receiptData.totalAmount}`,
+                `Payment Method: ${receiptData.paymentMethod.toUpperCase()}`,
+                `Date: ${receiptData.bookingDate}`
+            ];
+            let y = 35;
+            lines.forEach(line => {
+                doc.text(line, 20, y);
+                y += 8;
+            });
+            doc.save(`CineCloud_Receipt_${receiptData.bookingId}.pdf`);
+        };
+
+        window.processPayment = async function() {
+            const btn = document.getElementById('payBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+
+            const selectedMethod = document.querySelector('input[name="payment"]:checked')?.value || 'upi';
+            const result = await api.createBooking({
+                showtimeId,
+                seats: selectedSeats
+            });
+
+            if (result.error) {
+                alert('Payment failed: ' + result.error);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Pay Now';
+            } else {
+                const receiptData = buildReceiptData(result, selectedMethod);
+                localStorage.removeItem('selectedSeats');
+                localStorage.removeItem('showtimeId');
+                localStorage.removeItem('totalAmount');
+                renderPaymentSuccess(result, selectedMethod);
+                // auto-download receipt after booking success
+                window.downloadReceipt(receiptData);
+            }
+        };
+        
+        loadPayment();
+        })();
+    </script>
+</body>
+</html>

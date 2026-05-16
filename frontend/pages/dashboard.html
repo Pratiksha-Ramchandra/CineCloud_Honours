@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - CineCloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-50">
+    <div id="navbar"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <div id="content">
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-3xl text-blue-600"></i>
+                <p class="mt-2 text-gray-500">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/components.js"></script>
+    <script>
+        (async function(){
+        if (!requireAuth()) return;
+        
+        const user = getUser();
+        
+        async function loadDashboard() {
+            const movies = await api.getMovies();
+            const bookings = await api.getMyBookings();
+            
+            const totalBookings = bookings.length;
+            const activeBookings = bookings.filter(b => (b.status || '').toLowerCase() === 'confirmed').length;
+            const totalSpent = bookings.reduce((sum, b) => sum + Number(b.totalAmount || b.total_amount || 0), 0);
+            const stats = {
+                totalMovies: movies.length,
+                totalBookings,
+                activeBookings,
+                totalSpent
+            };
+            
+            document.getElementById('navbar').innerHTML = Navbar(user, 'dashboard');
+            
+            document.getElementById('content').innerHTML = `
+                <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
+                    <h1 class="text-3xl font-bold mb-2">Welcome back, ${user.name}! 🎬</h1>
+                    <p class="text-blue-100">Discover the latest movies and book your tickets instantly.</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Movies Available</p>
+                                <p class="text-2xl font-bold">${stats.totalMovies}</p>
+                            </div>
+                            <i class="fas fa-film text-3xl text-blue-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Active Bookings</p>
+                                <p class="text-2xl font-bold">${stats.activeBookings}</p>
+                            </div>
+                            <i class="fas fa-check-circle text-3xl text-green-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Bookings</p>
+                                <p class="text-2xl font-bold">${stats.totalBookings}</p>
+                            </div>
+                            <i class="fas fa-ticket-alt text-3xl text-yellow-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm">Total Spent</p>
+                                <p class="text-2xl font-bold">₹${stats.totalSpent}</p>
+                            </div>
+                            <i class="fas fa-rupee-sign text-3xl text-purple-500"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Now Showing</h2>
+                        <a href="/movies" class="text-blue-600 hover:text-blue-700">View All →</a>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="moviesGrid"></div>
+                </div>
+            `;
+            
+            const moviesGrid = document.getElementById('moviesGrid');
+            movies.slice(0, 6).forEach(movie => {
+                moviesGrid.innerHTML += `
+                    <div onclick="viewMovie('${movie.id}')" class="movie-card bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer">
+                        <img src="${movie.poster_url}" alt="${movie.title}" class="w-full h-48 object-cover">
+                        <div class="p-3">
+                            <h3 class="font-semibold text-sm truncate">${movie.title}</h3>
+                            <p class="text-gray-500 text-xs">${movie.genre}</p>
+                            <p class="text-gray-500 text-xs">${movie.duration} min</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        window.viewMovie = function(movieId) {
+            window.location.href = `/movie-details?id=${movieId}`;
+        };
+        
+        loadDashboard();
+        })();
+    </script>
+</body>
+</html>
