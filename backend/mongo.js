@@ -9,7 +9,7 @@ if (dnsServers) {
 
 const username = process.env.MONGO_USER || 'CineCloud_Database';
 const password = process.env.MONGO_PASSWORD || 'Pratu@9504';
-const host = process.env.MONGO_HOST || 'cinecloud.suooy1w.mongodb.net';
+const host = process.env.MONGO_HOST || 'cinecloud.hx5ymuk.mongodb.net';
 const dbName = process.env.MONGO_DB || 'cinecloud';
 const options = process.env.MONGO_OPTIONS || 'appName=CineCloud&retryWrites=true&w=majority';
 
