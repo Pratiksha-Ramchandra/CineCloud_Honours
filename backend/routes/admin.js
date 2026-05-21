@@ -205,21 +205,66 @@ router.get('/theaters', verifyToken, verifyRole(['admin']), async (req, res) => 
 router.post('/showtimes', verifyToken, verifyRole(['admin']), async (req, res) => {
     try {
         const { movie_id, theater_id, show_date, show_time, price, total_seats } = req.body;
+        console.log('[SHOWTIME CREATE] Endpoint hit - Method POST, User:', req.user);
+        console.log('[SHOWTIME CREATE] Request body:', { movie_id, theater_id, show_date, show_time, price, total_seats });
+
+        if (!movie_id || !theater_id || !show_date || !show_time || !price || !total_seats) {
+            console.log('[SHOWTIME CREATE] Error: Missing required fields');
+            return res.status(400).json({ error: 'All showtime fields are required' });
+        }
+
+        console.log('[SHOWTIME CREATE] Connecting to MongoDB...');
         const db = await connectMongo();
-        const result = await db.collection('showtimes').insertOne({
+        console.log('[SHOWTIME CREATE] MongoDB connected');
+
+        console.log('[SHOWTIME CREATE] Checking movie:', movie_id);
+        const movie = await db.collection('movies').findOne({ _id: new ObjectId(movie_id), isActive: true });
+        if (!movie) {
+            console.log('[SHOWTIME CREATE] Error: Movie not found or inactive');
+            return res.status(404).json({ error: 'Movie not found or inactive' });
+        }
+        console.log('[SHOWTIME CREATE] Movie found:', movie.title);
+
+        console.log('[SHOWTIME CREATE] Checking theater:', theater_id);
+        const theater = await db.collection('theaters').findOne({ _id: new ObjectId(theater_id) });
+        if (!theater) {
+            console.log('[SHOWTIME CREATE] Error: Theater not found');
+            return res.status(404).json({ error: 'Theater not found' });
+        }
+        console.log('[SHOWTIME CREATE] Theater found:', theater.name);
+
+        const showtimeDate = new Date(show_date);
+        if (isNaN(showtimeDate.getTime())) {
+            console.log('[SHOWTIME CREATE] Error: Invalid show date');
+            return res.status(400).json({ error: 'Invalid show date' });
+        }
+
+        const seats = Number(total_seats);
+        if (!Number.isFinite(seats) || seats <= 0) {
+            console.log('[SHOWTIME CREATE] Error: Invalid seat count');
+            return res.status(400).json({ error: 'Total seats must be a positive number' });
+        }
+
+        const showtimeDoc = {
             movieId: new ObjectId(movie_id),
             theaterId: new ObjectId(theater_id),
-            showDate: new Date(show_date),
+            showDate: showtimeDate,
             showTime: show_time,
             price: Number(price),
-            availableSeats: Number(total_seats),
-            totalSeats: Number(total_seats)
-        });
+            availableSeats: seats,
+            totalSeats: seats,
+            createdAt: new Date()
+        };
+
+        console.log('[SHOWTIME CREATE] Attempting to insert showtime:', showtimeDoc);
+        const result = await db.collection('showtimes').insertOne(showtimeDoc);
+        console.log('[SHOWTIME CREATE] SUCCESS - Showtime created with id:', result.insertedId.toString());
 
         res.status(201).json({ message: 'Showtime added', id: result.insertedId.toString() });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Failed to add showtime' });
+        console.error('[SHOWTIME CREATE] ERROR:', error.message);
+        console.error('[SHOWTIME CREATE] Stack:', error.stack);
+        res.status(500).json({ error: 'Failed to add showtime: ' + error.message });
     }
 });
 
